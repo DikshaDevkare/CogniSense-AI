@@ -49,3 +49,12 @@ data/
 uploads/
 temp/
 tmp/
+.venv/
+venv/
+__pycache__/
+*.pyc
+backend/.venv/
+backend/dataset/
+backend/fer_data/
+backend/session_data/
+backend/exports/

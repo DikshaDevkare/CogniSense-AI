@@ -10,6 +10,7 @@
       "use": "@vercel/static"
     }
   ],
+  "excludeFiles": "{backend/dataset/**,backend/fer_data/**,backend/session_data/**,backend/exports/**,.venv/**,venv/**}",
   "routes": [
     {
       "src": "/api/(.*)",
