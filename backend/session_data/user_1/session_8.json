@@ -1,0 +1,23 @@
+{
+  "session": {
+    "id": 8,
+    "user_id": 1,
+    "start_time": "2026-09-10 12:46:45",
+    "end_time": "2026-09-10 12:46:45",
+    "duration": 96,
+    "focus_score": 100.0,
+    "avg_stress": 0.0,
+    "distraction_count": 0,
+    "status": "Focused",
+    "cfi_final": 0.0,
+    "sustained_overload_count": 0,
+    "avg_cognitive_load": 0.0,
+    "avg_cfi": 0.0,
+    "total_blinks": 0,
+    "emotion_summary": null
+  },
+  "metrics": [],
+  "detections": [],
+  "alerts": [],
+  "exported_at": "2026-09-10T18:16:45"
+}

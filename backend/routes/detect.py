@@ -1,6 +1,12 @@
 from flask import Blueprint, request, jsonify
-import base64, cv2, numpy as np, time
+import base64
+import cv2
+import numpy as np
+import json
+
 from database import get_db
+from cognitive_engine import get_engine
+from typing_metrics import get_typing_metrics
 
 detect_bp = Blueprint('detect', __name__)
 
@@ -10,254 +16,199 @@ def _analyzer(uid):
     return get_analyzer(int(uid))
 
 
-def _decode_frame(b64: str):
+def _decode_frame(b64):
     try:
         if ',' in b64:
-            b64 = b64.split(',')[1]
+            b64 = b64.split(',', 1)[1]
         buf = np.frombuffer(base64.b64decode(b64), dtype=np.uint8)
         return cv2.imdecode(buf, cv2.IMREAD_COLOR)
-    except Exception as e:
-        print(f"[WARN] Frame decode: {e}")
+    except Exception as exc:
+        print(f'[WARN] Frame decode failed: {exc}')
         return None
 
 
-def _recs(result, live):
-    recs  = []
-    state = result.get('state', '')
-    br    = result.get('blink_rate', 0)
-    mins  = result.get('session_mins', 0)
-    stab  = result.get('head_stability', 100)
+def _typing_from_request(uid, data):
+    t = data.get('typing')
+    tracker = get_typing_metrics(uid)
+    if isinstance(t, dict):
+        return tracker.record(t.get('keypress_count', 0), t.get('backspace_count', 0), t.get('timestamp'))
+    return tracker.snapshot()
 
-    if mins > 45:
-        recs.append({'icon':'☕','text':'Take a 5-min break',
-                     'reason':f'{int(mins)} min of study'})
-    if 0 < br < 8:
-        recs.append({'icon':'👁️','text':'Blink more frequently',
-                     'reason':'Eye strain risk detected'})
-    if br > 26:
-        recs.append({'icon':'🧘','text':'Deep breathing exercise',
-                     'reason':'High blink rate — possible stress'})
-    if state == 'Distracted':
-        recs.append({'icon':'🎯','text':'Try Pomodoro technique',
-                     'reason':'Focus is inconsistent'})
-    if state == 'Stressed':
-        recs.append({'icon':'💆','text':'Short mental break',
-                     'reason':'Stress signals detected'})
-    if stab < 50:
-        recs.append({'icon':'📐','text':'Sit still and focus',
-                     'reason':'Excessive head movement'})
-    if not live.get('looking_fwd', True):
-        recs.append({'icon':'📺','text':'Look at the screen',
-                     'reason':'Gaze detected off-screen'})
-    if not recs:
-        recs.append({'icon':'🏆','text':'Keep it up!',
-                     'reason':'Excellent performance'})
+
+def _recs(result):
+    recs = []
+    state = result.get('state')
+    cfi = result.get('cfi', 0) or 0
+    blink = result.get('blink_rate', 0) or 0
+    pause = result.get('pause_duration')
+    if state == 'COGNITIVE_OVERLOAD':
+        recs.append({'icon': '🧘', 'text': 'Take a short mental break', 'reason': 'Sustained cognitive overload detected'})
+    elif state == 'FLOW_STATE':
+        recs.append({'icon': '⚡', 'text': 'Keep your current study rhythm', 'reason': 'High engagement with efficient typing'})
+    if cfi >= 85:
+        recs.append({'icon': '☕', 'text': 'Take a 2-minute micro-break', 'reason': 'High cumulative cognitive strain'})
+    if blink > 28:
+        recs.append({'icon': '👁️', 'text': 'Rest your eyes briefly', 'reason': 'High blink-rate signal'})
+    if pause is not None and pause > 4:
+        recs.append({'icon': '🧩', 'text': 'Break the task into one step', 'reason': 'Long pause detected'})
+    if not recs and state == 'NORMAL_STATE':
+        recs.append({'icon': '🎯', 'text': 'Continue your current routine', 'reason': 'No sustained overload detected'})
     return recs[:4]
 
 
-def _payload(result, live):
-    """Build full JSON payload for dashboard."""
-
-    # While first window hasn't completed yet
+def _payload(result, live, typing, decision):
+    result = result or {}
+    state = decision.get('state', 'NORMAL_STATE') if decision else 'NORMAL_STATE'
     if not result:
-        wp = live.get('window_progress', 0)
-        sl = live.get('secs_left', 5)
         return {
-            'state':'Analyzing...','focus_score':0,'smooth_focus':0,
-            'stress':0,'distraction':0,'fake_detected':False,
-            'blink_rate':0,'blinks_this_window':0,'blink_total':0,
-            'head_movement':'Initializing','head_stability':0,
-            'movement_score':0,'eye_consistency':0,'attention':0,
-            'looking_forward':False,'face_ratio':0,
+            'state': state, 'focus_score': 0, 'stress': 0, 'distraction': 0,
             'face_detected': live.get('face_detected', False),
-            'emotion':'Analyzing','emotion_confidence':0,
-            'window_progress':wp,'window_secs_left':sl,
-            'window_number':0,'is_observing':True,
-            'session_mins':0,'recommendations':[],
-
-            # DEBUG fields
-            'debug': {
-                'ear':          live.get('ear', 0),
-                'eye_state':    live.get('eye_state', 'unknown'),
-                'blinks_session': live.get('blinks_session', 0),
-                'blink_rate':   live.get('blink_rate', 0),
-                'yaw':          live.get('yaw', 0),
-                'pitch':        live.get('pitch', 0),
-                'looking_fwd':  live.get('looking_fwd', False),
-                'avg_attn':     live.get('avg_attn', 0),
-                'frames_face':  live.get('frames_face', 0),
-                'frames_all':   live.get('frames_all', 0),
-                'face_detected':live.get('face_detected', False),
-            }
+            'face_status': live.get('face_status', 'FACE_NOT_DETECTED'),
+            'data_quality': live.get('data_quality', 0),
+            'emotion': 'Unavailable', 'emotion_confidence': 0,
+            'blink_rate': live.get('blink_rate', 0),
+            'blink_total': live.get('blinks_session', 0), 'blinks_this_window': live.get('blinks_window', 0),
+            'avg_blink_duration': live.get('avg_blink_duration', 0),
+            'ear': live.get('ear', 0), 'ear_base': live.get('ear_base'),
+            'brow_deviation': 0, 'gaze_jitter': live.get('gaze_jitter'), 'cli_vision': None,
+            'kpm': typing.get('kpm'), 'backspace_ratio': typing.get('backspace_ratio'),
+            'pause_duration': typing.get('pause_duration'), 'typing_available': typing.get('available', False),
+            'cfi': decision.get('cfi', 0) if decision else 0,
+            'calibration_status': live.get('calibration_status'), 'calibration_progress': live.get('calibration_progress', 0),
+            'window_progress': live.get('window_progress', 0), 'window_secs_left': live.get('secs_left', 5),
+            'is_observing': True, 'reasons': [], 'recommendations': [],
         }
 
-    return {
-        # ── Cognitive state ──────────────────────────────
-        'state':              result.get('state', 'Analyzing...'),
-        'focus_score':        result.get('focus_score', 0),
-        'smooth_focus':       result.get('smooth_focus', 0),
-        'stress':             result.get('stress', 0),
-        'distraction':        result.get('distraction', 0),
-        'fake_detected':      result.get('fake_detected', False),
-
-        # ── Behavioral metrics ───────────────────────────
-        'blink_rate':         result.get('blink_rate', 0),
-        'blinks_this_window': live.get('blinks_window', 0),
-        'blink_total':        live.get('blinks_session', 0),
-        'head_movement':      result.get('head_movement', 'Stable'),
-        'head_stability':     result.get('head_stability', 0),
-        'movement_score':     result.get('movement_score', 0),
-        'eye_consistency':    result.get('eye_consistency', 0),
-        'attention':          result.get('avg_attention', 0),
-        'looking_forward':    live.get('looking_fwd', True),
-        'face_ratio':         result.get('face_ratio', 0),
-        'face_detected':      live.get('face_detected', False),
-
-        # ── Emotion (derived from state) ─────────────────
-        'emotion':            result.get('state', 'Neutral'),
-        'emotion_confidence': result.get('focus_score', 0),
-
-        # ── Observation window ───────────────────────────
-        'window_progress':    live.get('window_progress', 0),
-        'window_secs_left':   live.get('secs_left', 5),
-        'window_number':      result.get('window_number', 0),
-        'is_observing':       not live.get('window_ready', False),
-
-        # ── Session ──────────────────────────────────────
-        'session_mins':       result.get('session_mins', 0),
-
-        # ── Recommendations ──────────────────────────────
-        'recommendations':    _recs(result, live),
-
-        # ── DEBUG panel (visible in API response) ────────
+    merged = dict(result)
+    merged.update(decision or {})
+    merged.update({
+        'face_detected': live.get('face_detected', False),
+        'face_status': live.get('face_status', result.get('face_status', 'FACE_NOT_DETECTED')),
+        'data_quality': live.get('data_quality', result.get('data_quality', 0)),
+        'ear': live.get('ear', result.get('avg_ear', 0)),
+        'ear_base': live.get('ear_base'),
+        'blink_total': live.get('blinks_session', result.get('blinks_session', 0)),
+        'blinks_this_window': live.get('blinks_window', result.get('blinks_window', 0)),
+        'blink_rate': result.get('blink_rate', live.get('blink_rate', 0)),
+        'avg_blink_duration': result.get('avg_blink_duration', live.get('avg_blink_duration', 0)),
+        'brow_live': live.get('brow_live'),
+        'gaze_jitter': result.get('gaze_jitter', live.get('gaze_jitter')),
+        'calibration_status': live.get('calibration_status'),
+        'calibration_progress': live.get('calibration_progress', 0),
+        'window_progress': live.get('window_progress', 0),
+        'window_secs_left': live.get('secs_left', 5),
+        'is_observing': not live.get('window_completed', False),
+        'window_completed': live.get('window_completed', False),
+        'recommendations': _recs(merged),
         'debug': {
-            'ear':            live.get('ear', 0),
-            'eye_state':      live.get('eye_state', 'unknown'),
-            'blinks_session': live.get('blinks_session', 0),
-            'blinks_window':  live.get('blinks_window', 0),
-            'blink_rate':     live.get('blink_rate', 0),
-            'yaw':            live.get('yaw', 0),
-            'pitch':          live.get('pitch', 0),
-            'looking_fwd':    live.get('looking_fwd', False),
-            'avg_attn':       live.get('avg_attn', 0),
-            'frames_face':    live.get('frames_face', 0),
-            'frames_all':     live.get('frames_all', 0),
-            'face_detected':  live.get('face_detected', False),
-            'window_progress':live.get('window_progress', 0),
+            'face_status': live.get('face_status'), 'face_quality': live.get('data_quality'),
+            'ear': live.get('ear'), 'ear_base': live.get('ear_base'),
+            'blink_total': live.get('blinks_session'), 'blink_rate': live.get('blink_rate'),
+            'brow_live': live.get('brow_live'), 'brow_base': live.get('brow_base'),
+            'brow_deviation': merged.get('brow_deviation'), 'gaze_jitter': merged.get('gaze_jitter'),
+            'cli_vision': merged.get('cli_vision'), 'kpm': typing.get('kpm'),
+            'backspace_ratio': typing.get('backspace_ratio'), 'pause_duration': typing.get('pause_duration'),
+            'state': state, 'cfi': merged.get('cfi', 0), 'reasons': merged.get('reasons', []),
         }
-    }
+    })
+    return merged
 
 
-def _save(uid, sid, result):
+def _save(uid, sid, result, typing, decision):
+    if not sid:
+        return
     try:
-        c = get_db()
-        c.execute('''
-            INSERT INTO detections
-              (user_id,session_id,focus_score,stress_level,blink_rate,
-               head_movement,eye_consistency,attention_score,
-               cognitive_state,fake_detected)
-            VALUES(?,?,?,?,?,?,?,?,?,?)''',
-            (uid, sid,
-             result.get('focus_score',0), result.get('stress',0),
-             result.get('blink_rate',0),  result.get('head_movement',''),
-             result.get('eye_consistency',0), result.get('avg_attention',0),
-             result.get('state',''), int(result.get('fake_detected',False))))
+        conn = get_db()
+        conn.execute('''INSERT INTO detections
+            (user_id,session_id,focus_score,stress_level,blink_rate,head_movement,
+             eye_consistency,attention_score,cognitive_state,fake_detected,emotion,
+             emotion_confidence,cli_vision,cfi,kpm,backspace_ratio,pause_duration,
+             brow_deviation,gaze_jitter)
+            VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)''',
+            (uid, sid, result.get('focus_score', 0), result.get('stress', 0), result.get('blink_rate', 0),
+             result.get('head_movement', ''), result.get('eye_consistency', 0), result.get('avg_attention', 0),
+             decision.get('state', 'NORMAL_STATE'), 0, result.get('emotion', 'Unavailable'),
+             result.get('emotion_confidence', 0), decision.get('cli_vision'), decision.get('cfi', 0),
+             typing.get('kpm'), typing.get('backspace_ratio'), typing.get('pause_duration'),
+             result.get('brow_deviation', 0), result.get('gaze_jitter', 0)))
 
-        state  = result.get('state','')
-        stress = result.get('stress',0)
+        reasons = '; '.join(decision.get('reasons', []))
+        conn.execute('''INSERT INTO cognitive_metrics
+            (session_id,user_id,face_detected,face_status,data_quality,ear,blink_count,blink_rate,
+             avg_blink_duration,brow_deviation,gaze_jitter,cli_vision,kpm,backspace_ratio,
+             pause_duration,keypress_count,backspace_count,emotion,emotion_confidence,state,cfi,reasons)
+            VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)''',
+            (sid, uid, int(result.get('face_detected', False)), result.get('face_status'), result.get('data_quality', 0),
+             result.get('ear'), result.get('blink_total', 0), result.get('blink_rate'), result.get('avg_blink_duration', 0),
+             result.get('brow_deviation', 0), result.get('gaze_jitter'), decision.get('cli_vision'), typing.get('kpm'),
+             typing.get('backspace_ratio'), typing.get('pause_duration'), typing.get('keypress_count', 0),
+             typing.get('backspace_count', 0), result.get('emotion', 'Unavailable'), result.get('emotion_confidence', 0),
+             decision.get('state', 'NORMAL_STATE'), decision.get('cfi', 0), reasons))
 
-        if state == 'Stressed' and stress > 45:
-            c.execute('''INSERT INTO alerts
-                (user_id,session_id,alert_type,message,severity)
-                VALUES(?,?,?,?,?)''',
-                (uid,sid,'stress','High stress detected. Take a breath.','critical'))
-        if state == 'Distracted':
-            c.execute('''INSERT INTO alerts
-                (user_id,session_id,alert_type,message,severity)
-                VALUES(?,?,?,?,?)''',
-                (uid,sid,'focus','Distraction detected — refocus.','info'))
+        state = decision.get('state')
+        if state == 'COGNITIVE_OVERLOAD':
+            conn.execute('INSERT INTO alerts (user_id,session_id,alert_type,message,severity) VALUES(?,?,?,?,?)',
+                         (uid, sid, 'cognitive_overload', 'High cognitive strain detected. A short break is recommended.', 'critical'))
+        elif state == 'FLOW_STATE':
+            # Do not spam success alerts; the state is visible on the dashboard.
+            pass
+        if decision.get('cfi', 0) >= 85:
+            conn.execute('INSERT INTO alerts (user_id,session_id,alert_type,message,severity) VALUES(?,?,?,?,?)',
+                         (uid, sid, 'fatigue', 'High cumulative cognitive strain detected. A short break is recommended.', 'warning'))
+        conn.commit(); conn.close()
+    except Exception as exc:
+        print(f'[DB] telemetry save failed: {exc}')
 
-        c.commit(); c.close()
-    except Exception as e:
-        print(f"[DB] {e}")
 
-
-# ============================================================
-# POST /api/detect
-# ============================================================
 @detect_bp.route('/detect', methods=['POST'])
 def detect():
-    data    = request.get_json(silent=True) or {}
-    uid     = int(data.get('user_id', 1))
-    sid     = data.get('session_id')
-    b64     = data.get('frame')
+    data = request.get_json(silent=True) or {}
+    uid = int(data.get('user_id', 1))
+    sid = data.get('session_id')
+    frame_b64 = data.get('frame')
 
     az = _analyzer(uid)
+    typing = _typing_from_request(uid, data)
+    frame = _decode_frame(frame_b64) if frame_b64 else None
+    vision_result, _, live = az.process_frame(frame)
+    vision_result = vision_result or {}
+    if live.get('face_status') == 'MULTIPLE_FACES':
+        vision_result = None
 
-    if b64:
-        frame = _decode_frame(b64)
-        result, _, live = az.process_frame(frame)
-    else:
-        result, _, live = az.process_frame(None)
+    decision = get_engine(uid).decide({**vision_result, **live}, typing) if vision_result else get_engine(uid).decide({**live, 'cli_vision': None}, typing)
+    payload = _payload(vision_result, live, typing, decision)
 
-    if live and live.get('window_ready') and result:
-        _save(uid, sid, result)
+    if live.get('window_completed') and vision_result and live.get('calibrated'):
+        _save(uid, sid, payload, typing, decision)
 
-    return jsonify({'success': True, 'data': _payload(result, live)})
+    return jsonify({'success': True, 'data': payload})
 
 
-# ============================================================
-# GET /api/detect/debug  — real-time debug values
-# ============================================================
 @detect_bp.route('/detect/debug', methods=['GET'])
 def debug_state():
     uid = request.args.get('user_id', 1, type=int)
-    az  = _analyzer(uid)
-    live = az._make_live(False, 0, 0, 0, False)
-    return jsonify({
-        'success': True,
-        'debug': {
-            'ear':            live['ear'],
-            'eye_state':      live['eye_state'],
-            'blinks_session': live['blinks_session'],
-            'blink_rate':     live['blink_rate'],
-            'yaw':            live['yaw'],
-            'pitch':          live['pitch'],
-            'looking_fwd':    live['looking_fwd'],
-            'window_progress':live['window_progress'],
-            'secs_left':      live['secs_left'],
-            'frames_face':    live['frames_face'],
-            'frames_all':     live['frames_all'],
-        }
-    })
+    az = _analyzer(uid)
+    live = az.last_live or az._make_live(False, az.ear_base or 0, 0, 0, False, az.last_face_status, az.last_data_quality)
+    typing = get_typing_metrics(uid).snapshot()
+    return jsonify({'success': True, 'debug': {**live, **typing}})
 
 
-# ============================================================
-# GET /api/analyze
-# ============================================================
 @detect_bp.route('/analyze', methods=['GET'])
 def analyze():
-    uid  = request.args.get('user_id', 1, type=int)
+    uid = request.args.get('user_id', 1, type=int)
     conn = get_db()
-    rows = conn.execute('''
-        SELECT cognitive_state,
-               AVG(focus_score) AS af, AVG(stress_level) AS as_, COUNT(*) AS n
-        FROM detections WHERE user_id=?
-        GROUP BY cognitive_state''', (uid,)).fetchall()
+    rows = conn.execute('''SELECT state, COUNT(*) n, AVG(cli_vision) cli, AVG(cfi) cfi
+                           FROM cognitive_metrics WHERE user_id=? GROUP BY state''', (uid,)).fetchall()
     conn.close()
-    dist = {r['cognitive_state']: {
-        'count':r['n'],'avg_focus':round(r['af'] or 0,1),
-        'avg_stress':round(r['as_'] or 0,1)} for r in rows}
-    return jsonify({'success':True,'distribution':dist})
+    return jsonify({'success': True, 'distribution': {r['state']: {'count': r['n'], 'avg_cli': round(r['cli'] or 0, 1), 'avg_cfi': round(r['cfi'] or 0, 1)} for r in rows}})
 
 
-# ============================================================
-# POST /api/session/reset
-# ============================================================
 @detect_bp.route('/session/reset', methods=['POST'])
 def reset_session():
     data = request.get_json(silent=True) or {}
-    uid  = int(data.get('user_id', 1))
+    uid = int(data.get('user_id', 1))
     from mediapipe_engine import reset_analyzer
-    reset_analyzer(uid)
-    return jsonify({'success':True,'message':'Engine reset'})
+    from cognitive_engine import reset_engine
+    from typing_metrics import reset_typing_metrics
+    reset_analyzer(uid); reset_engine(uid); reset_typing_metrics(uid)
+    return jsonify({'success': True, 'message': 'Engine reset'})
