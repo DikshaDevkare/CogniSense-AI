@@ -1,0 +1,51 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+env/
+
+# Environment / secrets
+.env
+.env.*
+!.env.example
+
+# Flask
+instance/
+*.log
+
+# SQLite
+*.db
+*.sqlite
+*.sqlite3
+
+# Frontend
+node_modules/
+dist/
+build/
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Datasets
+datasets/
+data/
+*.csv
+*.zip
+
+# ML models
+*.h5
+*.keras
+*.onnx
+*.pth
+*.pt
+
+# Temporary files
+uploads/
+temp/
+tmp/

@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>CogniSense AI – Settings</title>
+  <link rel="stylesheet" href="../css/main.css"/>
+  <link rel="stylesheet" href="../css/dashboard.css"/>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;600;700;900&family=Exo+2:wght@300;400;500;600&display=swap" rel="stylesheet">
+</head>
+<body>
+<canvas id="neural-canvas"></canvas>
+<div class="app-layout">
+  <aside class="sidebar">
+    <div class="sidebar-logo">
+      <div class="logo-icon"><svg width="20" height="20" viewBox="0 0 32 32" fill="none"><circle cx="16" cy="16" r="12" stroke="#a855f7" stroke-width="1.5"/><circle cx="16" cy="16" r="6" fill="#a855f7" opacity="0.4"/><circle cx="16" cy="16" r="2.5" fill="#a855f7"/></svg></div>
+      <span>CogniSense<br/>AI</span>
+    </div>
+    <nav class="sidebar-nav">
+      <a class="nav-item" data-page="dashboard" href="dashboard.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>Dashboard</a>
+      <a class="nav-item" data-page="analytics" href="analytics.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>Analytics</a>
+      <a class="nav-item" data-page="planner" href="planner.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>Study Planner</a>
+      <a class="nav-item" data-page="sessions" href="sessions.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>Sessions</a>
+      <a class="nav-item" data-page="alerts" href="alerts.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>Alerts</a>
+      <a class="nav-item active" data-page="settings" href="settings.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>Settings</a>
+    </nav>
+    <div class="sidebar-bottom">
+      <a class="nav-item" onclick="logout()" style="cursor:pointer"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>Logout</a>
+    </div>
+  </aside>
+
+  <div class="main-content">
+    <header class="topbar">
+      <div class="topbar-left"><span class="page-title">Settings</span></div>
+      <div class="topbar-right">
+        <div class="ai-status"><span class="status-dot green"></span> AI Active</div>
+        <span class="topbar-clock" id="live-clock">00:00:00</span>
+        <div class="notif-btn"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg><span class="notif-badge">3</span></div>
+        <div class="user-profile"><div class="user-avatar" id="user-avatar">S</div><span class="user-name" id="user-name">Shrushti</span></div>
+      </div>
+    </header>
+
+    <main class="page-content">
+      <div class="settings-grid">
+        <!-- Camera Settings -->
+        <div class="settings-section">
+          <div class="settings-section-title">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#a855f7" stroke-width="2"><path d="M15 10l4.55-2.55A1 1 0 0 1 21 8.4v7.2a1 1 0 0 1-1.45.9L15 14M3 8a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8z"/></svg>
+            Camera Settings
+          </div>
+          <div class="setting-row">
+            <div class="setting-info"><p>Enable Webcam</p><span>Allow camera access for detection</span></div>
+            <label class="toggle"><input type="checkbox" id="toggle-camera" class="setting-toggle" checked><span class="toggle-slider"></span></label>
+          </div>
+          <div class="setting-row">
+            <div class="setting-info"><p>Face Landmark Overlay</p><span>Show MediaPipe landmarks</span></div>
+            <label class="toggle"><input type="checkbox" id="toggle-landmarks" class="setting-toggle" checked><span class="toggle-slider"></span></label>
+          </div>
+          <div class="setting-row">
+            <div class="setting-info"><p>Detection Sensitivity</p><span>Higher = more alerts</span></div>
+            <select class="select-pill" style="padding:6px 12px;font-size:12px">
+              <option>Medium</option><option>Low</option><option>High</option>
+            </select>
+          </div>
+          <div class="setting-row">
+            <div class="setting-info"><p>Camera Resolution</p><span>Higher quality = more CPU</span></div>
+            <select class="select-pill" style="padding:6px 12px;font-size:12px">
+              <option>720p</option><option>480p</option><option>1080p</option>
+            </select>
+          </div>
+        </div>
+
+        <!-- Notifications -->
+        <div class="settings-section">
+          <div class="settings-section-title">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#a855f7" stroke-width="2"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
+            Notifications
+          </div>
+          <div class="setting-row">
+            <div class="setting-info"><p>Focus Alerts</p><span>Notify when focus drops</span></div>
+            <label class="toggle"><input type="checkbox" id="toggle-focus-alert" class="setting-toggle" checked><span class="toggle-slider"></span></label>
+          </div>
+          <div class="setting-row">
+            <div class="setting-info"><p>Stress Notifications</p><span>Alert on high stress level</span></div>
+            <label class="toggle"><input type="checkbox" id="toggle-stress-alert" class="setting-toggle" checked><span class="toggle-slider"></span></label>
+          </div>
+          <div class="setting-row">
+            <div class="setting-info"><p>Break Reminders</p><span>Remind to take breaks</span></div>
+            <label class="toggle"><input type="checkbox" id="toggle-breaks" class="setting-toggle" checked><span class="toggle-slider"></span></label>
+          </div>
+          <div class="setting-row">
+            <div class="setting-info"><p>Sound Alerts</p><span>Play sound on critical alerts</span></div>
+            <label class="toggle"><input type="checkbox" id="toggle-sound" class="setting-toggle"><span class="toggle-slider"></span></label>
+          </div>
+        </div>
+
+        <!-- Session Preferences -->
+        <div class="settings-section">
+          <div class="settings-section-title">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#a855f7" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+            Session Preferences
+          </div>
+          <div class="setting-row">
+            <div class="setting-info"><p>Auto-save Sessions</p><span>Save session data automatically</span></div>
+            <label class="toggle"><input type="checkbox" id="toggle-autosave" class="setting-toggle" checked><span class="toggle-slider"></span></label>
+          </div>
+          <div class="setting-row">
+            <div class="setting-info"><p>Break Interval</p><span>Reminder frequency</span></div>
+            <select class="select-pill" style="padding:6px 12px;font-size:12px">
+              <option>45 minutes</option><option>25 minutes</option><option>60 minutes</option><option>90 minutes</option>
+            </select>
+          </div>
+          <div class="setting-row">
+            <div class="setting-info"><p>AI Recommendations</p><span>Show smart study suggestions</span></div>
+            <label class="toggle"><input type="checkbox" id="toggle-recs" class="setting-toggle" checked><span class="toggle-slider"></span></label>
+          </div>
+          <div class="setting-row">
+            <div class="setting-info"><p>Session History Limit</p><span>Max sessions to store</span></div>
+            <select class="select-pill" style="padding:6px 12px;font-size:12px">
+              <option>50 sessions</option><option>25 sessions</option><option>100 sessions</option>
+            </select>
+          </div>
+        </div>
+
+        <!-- Theme & Profile -->
+        <div class="settings-section">
+          <div class="settings-section-title">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#a855f7" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M12 1v4M12 19v4M4.22 4.22l2.83 2.83M16.95 16.95l2.83 2.83M1 12h4M19 12h4M4.22 19.78l2.83-2.83M16.95 7.05l2.83-2.83"/></svg>
+            Theme & Profile
+          </div>
+          <div class="setting-row">
+            <div class="setting-info"><p>Username</p><span>Your display name</span></div>
+            <input type="text" value="Shrushti" style="background:rgba(255,255,255,0.05);border:1px solid var(--border-color);border-radius:8px;padding:6px 12px;color:var(--text-primary);font-family:var(--font-body);font-size:13px;width:130px;outline:none"/>
+          </div>
+          <div class="setting-row">
+            <div class="setting-info"><p>Color Accent</p><span>Primary UI color</span></div>
+            <div style="display:flex;gap:8px">
+              <div style="width:24px;height:24px;border-radius:50%;background:#a855f7;cursor:pointer;border:2px solid white;box-shadow:0 0 8px rgba(168,85,247,0.6)"></div>
+              <div style="width:24px;height:24px;border-radius:50%;background:#0ea5e9;cursor:pointer;border:2px solid transparent" onclick="setAccent('#0ea5e9')"></div>
+              <div style="width:24px;height:24px;border-radius:50%;background:#22c55e;cursor:pointer;border:2px solid transparent" onclick="setAccent('#22c55e')"></div>
+              <div style="width:24px;height:24px;border-radius:50%;background:#f97316;cursor:pointer;border:2px solid transparent" onclick="setAccent('#f97316')"></div>
+            </div>
+          </div>
+          <div class="setting-row">
+            <div class="setting-info"><p>Particle Effects</p><span>Background neural animations</span></div>
+            <label class="toggle"><input type="checkbox" id="toggle-particles" class="setting-toggle" checked><span class="toggle-slider"></span></label>
+          </div>
+          <div class="setting-row">
+            <div class="setting-info"><p>Compact Mode</p><span>Denser UI layout</span></div>
+            <label class="toggle"><input type="checkbox" id="toggle-compact" class="setting-toggle"><span class="toggle-slider"></span></label>
+          </div>
+        </div>
+      </div>
+
+      <!-- Save Button -->
+      <div style="display:flex;justify-content:flex-end;gap:12px;margin-top:24px">
+        <button class="btn-secondary" onclick="loadSettings()">Reset</button>
+        <button class="btn-primary" onclick="saveSettings()">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right:6px;vertical-align:middle"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
+          Save Settings
+        </button>
+      </div>
+    </main>
+  </div>
+</div>
+
+<script src="../js/particles.js"></script>
+<script src="../js/app.js"></script>
+<script>
+function setAccent(color) {
+  document.documentElement.style.setProperty('--purple', color);
+  showToast(`Accent color updated!`);
+}
+</script>
+</body>
+</html>
